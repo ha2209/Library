@@ -10,8 +10,8 @@ ct1 <- 0
 ct2 <- 0
 ct3 <- 0
 
-tickers <- c("VWO","IVV","ALJ","AMAG","INTC","VUG","VEU","VTV","VEMPX","VIIIX","VTPSX","VFINX","VGTSX","BAC","ALBKY","DSEEX","VXUS","VTI","WFSPX","WACSX","VBMPX","PTTRX","BBW")
-type <- c("X","U","U","U","U","U","X","U","U","U","X","U","X","U","X","U","X","U","U","B","B","B","U")
+tickers <- c("BAC")
+type <- c("U") # U = US, X = ExUS, B = Bonds
 
 
 US_data <- read_csv("US_F-F_Data.csv", col_types = "Dddddddd")
@@ -35,8 +35,8 @@ for (i in 1:length(tickers)){
   NonNAindex <- which(!is.na(ts$TOT_RETURN_INDEX_GROSS_DVDS))
   firstNonNA <- min(NonNAindex)
   ts <- ts[firstNonNA:dim(ts)[1],]
-  ts$TOT_RETURN_INDEX_GROSS_DVDS <- na.locf(ts$TOT_RETURN_INDEX_GROSS_DVDS)
-
+  # ts$TOT_RETURN_INDEX_GROSS_DVDS <- na.locf(ts$TOT_RETURN_INDEX_GROSS_DVDS)
+  
   
   mergedts <- merge(US_data, ts,  by.x = "dates", by.y = "date")
   mergedts <- merge(mergedts, ExUS_data,  by.x = "dates", by.y = "dates")
@@ -45,17 +45,26 @@ for (i in 1:length(tickers)){
   mergedts[,2:dim(mergedts)[2]] <- rbind(NA,apply(mergedts[,2:dim(mergedts)[2]],2,diff)/mergedts[1:dim(mergedts)[1]-1,2:dim(mergedts)[2]])
   mergedts = na.omit(mergedts)
   X <- as.data.frame(cbind(mergedts$US_Mkt,mergedts$US_SMB,mergedts$US_HML,mergedts$US_RMW,mergedts$US_CMA,mergedts$US_MOM,
-             mergedts$ExUS_Mkt,mergedts$ExUS_SMB,mergedts$ExUS_HML,mergedts$ExUS_RMW,mergedts$ExUS_CMA,mergedts$ExUS_MOM,
-             mergedts$IT_GOVT,mergedts$LT_GOVT,mergedts$LT_CORP,mergedts$US_MBS))
+                           mergedts$ExUS_Mkt,mergedts$ExUS_SMB,mergedts$ExUS_HML,mergedts$ExUS_RMW,mergedts$ExUS_CMA,mergedts$ExUS_MOM,
+                           mergedts$IT_GOVT,mergedts$LT_GOVT,mergedts$LT_CORP,mergedts$US_MBS))
   colnames(X)<-c(colnames(US_data)[2:(dim(US_data)[2]-1)], colnames(ExUS_data)[2:(dim(ExUS_data)[2]-1)],
                  colnames(Bonds_data)[2:(dim(Bonds_data)[2]-1)])
   X <- as.matrix(log(1+X))
   
   y <- log(1 + mergedts$TOT_RETURN_INDEX_GROSS_DVDS - mergedts$RF)
   out_index <- switch(type[i], U = US_Index, X = ExUS_Index, B = Bonds_Index)
-  
-  results <- regsubsets(X,y,force.out=out_index)
+  if (type[i]=="A"){
+    results <- regsubsets(X,y)
+  } else {
+    results <- regsubsets(X,y,force.out=out_index)
+  }
   c <- coef(results, which(summary(results)$bic == min(summary(results)$bic)))
   Out[i,match(intersect(names(Out),names(c)), names(Out))] <- t(c)
+  
+  par(mfrow=c(1,2))
+  plot(results, scale="bic")
+  title(main = tickers[i])
+  plot(results,scale="adjr2")
+  title(main = tickers[i])
 }
-write_csv(Out, path='D:/Personal/Investments/Funds_Factor_Exposure.csv')
+print(Out)
